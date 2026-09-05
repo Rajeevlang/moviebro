@@ -5,7 +5,8 @@
 // ==================================
 
 
-// for testing 
+// for testting the automated pipeline
+
 pipeline {
     agent {
         label 'ec2-agent'
