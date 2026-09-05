@@ -1,0 +1,93 @@
+# =============================================================================
+# Root .gitignore — Movie Microservices & Frontend
+# Safe for Public GitHub Repositories
+# =============================================================================
+
+# ── 1. Secrets & Environment Configurations ───────────────────────────────────
+# NEVER push real API keys, DB passwords, or JWT secrets to a public repo!
+**/.env
+**/.env.*
+**/*.env.save
+**/*.env.local
+**/*.env.production
+*.save
+*.bak
+*.backup
+
+# Keep documentation/template configs tracked
+!**/.env.example
+!**/*.env.example
+
+# ── 2. SSL/TLS Certificates & Private Keys ────────────────────────────────────
+certs/
+moviehub/certs/
+*.pem
+*.key
+*.crt
+*.csr
+*.pfx
+*.p12
+
+# ── 3. Compiled Go Binaries & Artifacts ───────────────────────────────────────
+bin/
+moviehub/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+cover.out
+profile.out
+
+# ── 4. Frontend & Node.js Artifacts ───────────────────────────────────────────
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+build/
+**/build/
+.svelte-kit/
+.next/
+.nuxt/
+.cache/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── 5. Python Artifacts (Testing & Seeding Scripts) ───────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+.pytest_cache/
+
+# ── 6. Database, Docker Volumes & Runtime Logs ─────────────────────────────────
+*.log
+logs/
+*.sqlite
+*.sqlite3
+*.db
+pgdata/
+redisdata/
+mongo_data/
+
+# ── 7. OS & Editor Metadata ───────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
