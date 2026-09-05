@@ -57,8 +57,9 @@ pipeline {
                             sh '''
                                 docker run --rm \
                                   -v $(pwd):/app \
+                                  -v go-mod-cache:/go/pkg/mod \
                                   -w /app \
-                                  golang:1.23-alpine \
+                                  golang:alpine \
                                   sh -c "go vet ./... && go test -v ./internal/..."
                             '''
                         }
