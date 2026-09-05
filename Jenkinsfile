@@ -1,8 +1,11 @@
 // =============================================================================
 // MovieHub Production CI/CD Pipeline (Jenkinsfile)
 // Automates: Linting -> Testing -> Building -> Deploying to EC2 -> Live Smoke Test
-// =============================================================================
+// ===========================================
+// ==================================
 
+
+// for testing 
 pipeline {
     agent {
         label 'ec2-agent'
