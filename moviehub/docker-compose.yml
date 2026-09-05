@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  redisdb:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+
+  postgresdb:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_pass_123}
+      POSTGRES_DB: ${POSTGRES_DB:-app_db}
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./internal/user/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+
+  mongodb:
+    image: mongo:7.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-password123}
+    ports:
+      - "127.0.0.1:27018:27017"
+    volumes:
+      - mongodb_data:/data/db
+
+  movie-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8082:8081"
+    environment:
+      - MONGO_URI=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-password123}@mongodb:27017/?authSource=admin
+      - REDIS_URI=redisdb:6379
+      - SERVER_PORT=8081
+      - ENVIRONMENT=production
+    depends_on:
+      - mongodb
+      - redisdb
+
+  user-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.user
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8083:8082"
+    environment:
+      - POSTGRES_URI=postgres://${POSTGRES_USER:-app_user}:${POSTGRES_PASSWORD:-secure_pass_123}@postgresdb:5432/${POSTGRES_DB:-app_db}?sslmode=disable
+      - REDIS_URI=redisdb:6379
+      - SERVER_PORT=8082
+      - SECERET_KEY=${SECERET_KEY:-super-secret-jwt-signing-key-change-this-in-production-12345}
+      - ENVIRONMENT=production
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GOOGLE_REDIRECT_URL=${GOOGLE_REDIRECT_URL:-}
+    depends_on:
+      - postgresdb
+      - redisdb
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      - GATEWAY_PORT=8080
+      - MOVIE_SERVICE_URL=http://movie-service:8081
+      - USER_SERVICE_URL=http://user-service:8082
+      - SECERET_KEY=${SECERET_KEY:-super-secret-jwt-signing-key-change-this-in-production-12345}
+      - ENVIRONMENT=production
+    depends_on:
+      - movie-service
+      - user-service
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:80"
+    volumes:
+      - ../frontend/nginx.local.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api-gateway
+
+volumes:
+  mongodb_data:
+  redis_data:
+  postgres_data:

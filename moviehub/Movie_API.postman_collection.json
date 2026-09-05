@@ -1,0 +1,152 @@
+{
+  "info": {
+    "name": "Gin Microservice Movie API",
+    "description": "Complete Postman Collection for the Movie API, User Auth, and API Gateway",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "User Service (Auth)",
+      "item": [
+        {
+          "name": "Register User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/users/register",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "users", "register"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"username\": \"testuser\",\n    \"password\": \"secure123\",\n    \"email\": \"test@example.com\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/users/login",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "users", "login"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"username\": \"testuser\",\n    \"password\": \"secure123\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Movie Service (Catalog)",
+      "item": [
+        {
+          "name": "Get All Movies",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/movies/",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "movies", ""]
+            }
+          }
+        },
+        {
+          "name": "Get Movie By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/movies/<MOVIE_ID>",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "movies", "<MOVIE_ID>"]
+            }
+          }
+        },
+        {
+          "name": "Create Movie",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer <YOUR_JWT_TOKEN>"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/movies/",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "movies", ""]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"title\": \"Inception\",\n    \"director\": \"Christopher Nolan\",\n    \"release_year\": 2010,\n    \"genres\": [\"Sci-Fi\", \"Action\"],\n    \"rating\": 8.8\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Playlist Service",
+      "item": [
+        {
+          "name": "Create Playlist",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer <YOUR_JWT_TOKEN>"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/list/",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "list", ""]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"user_id\": \"<USER_ID>\",\n    \"name\": \"My Favorites\"\n}"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

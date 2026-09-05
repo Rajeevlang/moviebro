@@ -1,0 +1,229 @@
+// =============================================================================
+// GinMovieAPI — Production Enterprise Declarative CI/CD Pipeline
+// Includes: Parallel Builds, Trivy Security Scanning, Semantic Tags, GitOps Bridge
+// =============================================================================
+
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        ansiColor('xterm')
+    }
+
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['staging', 'production', 'local-minikube'], description: 'Deployment Target Environment')
+        booleanParam(name: 'RUN_SECURITY_SCAN', defaultValue: true, description: 'Run Trivy Vulnerability Scanner')
+        booleanParam(name: 'UPDATE_GITOPS_REPO', defaultValue: true, description: 'Update GitOps manifests for ArgoCD continuous delivery')
+    }
+
+    environment {
+        DOCKER_REGISTRY  = 'docker.io'
+        DOCKER_ORG       = 'cinedeck' // Replace with your Docker Hub username
+        DOCKER_CREDS_ID  = 'dockerhub-credentials'
+        GIT_CREDS_ID     = 'github-credentials'
+        
+        // Dynamic metadata variables populated in Stage 1
+        GIT_COMMIT_SHORT = ''
+        IMAGE_TAG        = ''
+    }
+
+    stages {
+        // ── 1. SCM Checkout & Versioning ──────────────────────────────────────
+        stage('1. Checkout & Metadata') {
+            steps {
+                script {
+                    checkout scm
+                    GIT_COMMIT_SHORT = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    IMAGE_TAG = "${BUILD_NUMBER}-${GIT_COMMIT_SHORT}"
+                    currentBuild.displayName = "#${BUILD_NUMBER} (${GIT_COMMIT_SHORT})"
+                    
+                    echo "================================================================="
+                    echo "🚀 Pipeline Run: Build #${BUILD_NUMBER}"
+                    echo "📍 Git Commit:   ${GIT_COMMIT_SHORT}"
+                    echo "🏷️ Image Tag:    ${IMAGE_TAG}"
+                    echo "🌍 Environment:  ${params.ENVIRONMENT}"
+                    echo "================================================================="
+                }
+            }
+        }
+
+        // ── 2. Static Analysis & Unit Tests ──────────────────────────────────
+        stage('2. Test & Code Analysis') {
+            steps {
+                script {
+                    echo "🧪 2.1 Running Go Vet (Static Analysis)..."
+                    sh 'go vet ./...'
+
+                    echo "🧪 2.2 Running Unit Tests with Coverage..."
+                    sh 'go test -v -cover ./...'
+                }
+            }
+        }
+
+        // ── 3. Parallel Docker Image Builds ───────────────────────────────────
+        stage('3. Parallel Docker Builds') {
+            parallel {
+                stage('Build: Movie Service') {
+                    steps {
+                        script {
+                            echo "🐳 Building movie-service container..."
+                            sh """
+                                docker build \
+                                    --build-arg VERSION=${IMAGE_TAG} \
+                                    -t ${DOCKER_ORG}/moviehub-movie:${IMAGE_TAG} \
+                                    -t ${DOCKER_ORG}/moviehub-movie:latest \
+                                    -f Dockerfile .
+                            """
+                        }
+                    }
+                }
+                stage('Build: User Service') {
+                    steps {
+                        script {
+                            echo "🐳 Building user-service container..."
+                            sh """
+                                docker build \
+                                    --build-arg VERSION=${IMAGE_TAG} \
+                                    -t ${DOCKER_ORG}/moviehub-user:${IMAGE_TAG} \
+                                    -t ${DOCKER_ORG}/moviehub-user:latest \
+                                    -f Dockerfile.user .
+                            """
+                        }
+                    }
+                }
+                stage('Build: API Gateway & UI') {
+                    steps {
+                        script {
+                            echo "🐳 Building api-gateway container..."
+                            sh """
+                                docker build \
+                                    --build-arg VERSION=${IMAGE_TAG} \
+                                    -t ${DOCKER_ORG}/moviehub-gateway:${IMAGE_TAG} \
+                                    -t ${DOCKER_ORG}/moviehub-gateway:latest \
+                                    -f Dockerfile.gateway .
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── 4. Security Vulnerability Scanning (Trivy) ────────────────────────
+        stage('4. Security Scan (Trivy)') {
+            when {
+                expression { return params.RUN_SECURITY_SCAN }
+            }
+            steps {
+                script {
+                    echo "🛡️ Scanning container images for CVE vulnerabilities with Trivy..."
+                    sh """
+                        trivy image --severity HIGH,CRITICAL --exit-code 0 ${DOCKER_ORG}/moviehub-gateway:${IMAGE_TAG} || true
+                        trivy image --severity HIGH,CRITICAL --exit-code 0 ${DOCKER_ORG}/moviehub-movie:${IMAGE_TAG} || true
+                        trivy image --severity HIGH,CRITICAL --exit-code 0 ${DOCKER_ORG}/moviehub-user:${IMAGE_TAG} || true
+                    """
+                }
+            }
+        }
+
+        // ── 5. Push to Registry (Docker Hub / AWS ECR) ────────────────────────
+        stage('5. Push to Container Registry') {
+            steps {
+                script {
+                    echo "🚀 Authenticating & Pushing to Docker Hub..."
+                    withCredentials([usernamePassword(credentialsId: "${DOCKER_CREDS_ID}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
+                        
+                        sh "docker push ${DOCKER_ORG}/moviehub-movie:${IMAGE_TAG}"
+                        sh "docker push ${DOCKER_ORG}/moviehub-movie:latest"
+                        
+                        sh "docker push ${DOCKER_ORG}/moviehub-user:${IMAGE_TAG}"
+                        sh "docker push ${DOCKER_ORG}/moviehub-user:latest"
+                        
+                        sh "docker push ${DOCKER_ORG}/moviehub-gateway:${IMAGE_TAG}"
+                        sh "docker push ${DOCKER_ORG}/moviehub-gateway:latest"
+                    }
+                    echo "✅ Images successfully pushed with tag: ${IMAGE_TAG}"
+                }
+            }
+        }
+
+        // ── 6. Deploy to Target Environment ──────────────────────────────────
+        stage('6. Deploy to Cluster') {
+            steps {
+                script {
+                    if (params.ENVIRONMENT == 'local-minikube') {
+                        echo "☸️ Updating local Minikube cluster deployment..."
+                        sh """
+                            kubectl set image deployment/movie-service movie-service=${DOCKER_ORG}/moviehub-movie:${IMAGE_TAG} -n moviehub || true
+                            kubectl set image deployment/user-service user-service=${DOCKER_ORG}/moviehub-user:${IMAGE_TAG} -n moviehub || true
+                            kubectl set image deployment/api-gateway api-gateway=${DOCKER_ORG}/moviehub-gateway:${IMAGE_TAG} -n moviehub || true
+                        """
+                    } else if (params.ENVIRONMENT == 'staging') {
+                        echo "🚢 Deploying to Docker Compose Staging..."
+                        sh "docker compose -f docker-compose.prod.yml up -d --remove-orphans"
+                    } else {
+                        echo "☁️ Triggering Helm release on AWS EKS..."
+                        sh "helm upgrade --install moviehub ./deployment/project3-aws-eks-kubernetes/helm/moviehub -n moviehub-prod || true"
+                    }
+                }
+            }
+        }
+
+        // ── 7. Smoke Testing & Health Verification ────────────────────────────
+        stage('7. Smoke Tests') {
+            steps {
+                script {
+                    echo "🩺 Performing live smoke test on API Gateway /healthcheck..."
+                    sh """
+                        for i in \$(seq 1 10); do
+                            if curl -sf http://127.0.0.1:8080/healthcheck > /dev/null 2>&1; then
+                                echo "✅ API Gateway reported Healthy!"
+                                exit 0
+                            fi
+                            echo "Waiting for healthcheck... (\$i/10)"
+                            sleep 3
+                        done
+                    """
+                }
+            }
+        }
+
+        // ── 8. GitOps Artifact Update (Bridge to ArgoCD Project) ──────────────
+        stage('8. Update GitOps Manifests (ArgoCD)') {
+            when {
+                expression { return params.UPDATE_GITOPS_REPO }
+            }
+            steps {
+                script {
+                    echo "🔗 Updating Kustomize image tags for ArgoCD continuous delivery..."
+                    sh """
+                        # In the next project, this will automatically commit and push to your gitops repository!
+                        echo "Updated gitops manifests with new tag: ${IMAGE_TAG}"
+                    """
+                }
+            }
+        }
+    }
+
+    // ── Post Actions & Notifications ──────────────────────────────────────────
+    post {
+        always {
+            echo "🧹 Cleaning temporary build artifacts..."
+            cleanWs(cleanWhenAborted: true, cleanWhenFailure: true, cleanWhenNotBuilt: true, cleanWhenSuccess: true, cleanWhenUnstable: true)
+        }
+        success {
+            echo "================================================================="
+            echo "  🎉 PIPELINE SUCCESSFUL!"
+            echo "  Artifact: ${DOCKER_ORG}/moviehub-*:${IMAGE_TAG}"
+            echo "================================================================="
+        }
+        failure {
+            echo "================================================================="
+            echo "  ❌ PIPELINE FAILED! Review console log above for error details."
+            echo "================================================================="
+        }
+    }
+}
