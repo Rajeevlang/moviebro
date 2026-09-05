@@ -62,7 +62,11 @@ def make_request(
     timeout: int = 10,
 ) -> Tuple[int, Any]:
     """Execute an HTTP request and parse JSON response using urllib."""
-    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    }
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
